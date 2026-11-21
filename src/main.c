@@ -48,7 +48,7 @@ static void show_error(const char *message)
     dclear(C_WHITE);
     dtext(20,25,C_BLACK,"Tinyking EX-word");
     dtext(20,55,C_BLACK,message);
-    dtext(20,95,C_BLACK,"Check tower.gmpak beside main.edl");
+    dtext(20,95,C_BLACK,"Check tower.pak beside main.edl");
     dtext(20,125,C_BLACK,"Press any key to return.");
     dupdate();
     getkey();
@@ -56,7 +56,7 @@ static void show_error(const char *message)
 static int init_game(void)
 {
     if(DWIDTH!=528 || DHEIGHT!=320)return -2;
-    if(tk_pak_open(&pack,"tower.gmpak")<0)return -1;
+    if(tk_pak_open(&pack,"tower.pak")<0)return -1;
     if(tk_world_init(&world,&pack)<0 || tk_weather_init(&weather,&pack,world.rooms)<0 ||
        tk_speech_init(&speech,&pack)<0)return -3;
     uint8_t meta[2];
@@ -245,7 +245,7 @@ int main(void)
 {
     int init=init_game();
     if(init<0){
-        show_error(init==-1?"Cannot open tower.gmpak":
+        show_error(init==-1?"Cannot open tower.pak":
                    init==-2?"Unsupported screen dimensions":"Invalid tower data");
         tk_pak_close(&pack);
         return init;

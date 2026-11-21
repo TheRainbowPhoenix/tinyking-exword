@@ -52,17 +52,17 @@ generate_exword_package(TARGET embedded_bootstrap
 
 # The game pack stays outside the ELF arena, but is committed to this repo.
 # Both EX-word locale packages MUST contain it beside main.edl.
-set(TINYKING_PAK "${CMAKE_CURRENT_SOURCE_DIR}/tower.gmpak"
+set(TINYKING_PAK "${CMAKE_CURRENT_SOURCE_DIR}/tower.pak"
     CACHE FILEPATH "Path to the GMPK v1 asset pack")
 if(NOT EXISTS "${TINYKING_PAK}")
-  message(FATAL_ERROR "Missing tower.gmpak: a TKING package without assets cannot run")
+  message(FATAL_ERROR "Missing tower.pak: a TKING package without assets cannot run")
 endif()
 foreach(LOCALE IN ITEMS ja cn)
   add_custom_target(tinyking_payload_${LOCALE} ALL
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:tinyking_app>"
       "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/main.edl"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${TINYKING_PAK}"
-      "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/tower.gmpak"
+      "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/tower.pak"
     DEPENDS embedded_bootstrap_package_${LOCALE} tinyking_app VERBATIM)
 endforeach()
 

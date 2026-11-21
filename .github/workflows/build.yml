@@ -23,7 +23,7 @@ jobs:
       - name: Verify reproducible 32x32 crown art
         run: python3 tools/generate_icon.py --check
       - name: Require checked-in game data
-        run: test -s tower.gmpak
+        run: test -s tower.pak
       - name: Compare C physics, streaming and weather against Python
         run: python3 tests/test_port.py
 
@@ -45,12 +45,12 @@ jobs:
           repository: TheRainbowPhoenix/exword-xd-a8500-TEST
           path: dependencies/metadata
       # Use the committed game pack; never silently build asset-free packages.
-      - name: Check checked-in tower.gmpak
+      - name: Check checked-in tower.pak
         shell: bash
         run: |
           set -euo pipefail
-          test -s tower.gmpak
-          echo "Bundling $(wc -c < tower.gmpak) bytes of game data"
+          test -s tower.pak
+          echo "Bundling $(wc -c < tower.pak) bytes of game data"
       - name: Install EX-word fxSDK
         shell: bash
         run: |
@@ -91,7 +91,7 @@ jobs:
             -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
           cmake --build build --parallel 2
           # The upstream test requires >128 KiB of *embedded* data because it
-          # targets a large-demo payload. TKING streams tower.gmpak instead.
+          # targets a large-demo payload. TKING streams tower.pak instead.
           # Keep the loader/relocation checks, without that demo-only threshold.
           cc -std=c11 -Wall -Wextra -Werror \
             -Idependencies/edelweiss/exword -Idependencies/edelweiss/sdk \
@@ -104,8 +104,8 @@ jobs:
         run: |
           set -euo pipefail
           for locale in ja cn; do
-            cmp -- tower.gmpak "build/packages/$locale/TKING/tower.gmpak"
-            echo "TKING-$locale includes the exact committed tower.gmpak"
+            cmp -- tower.pak "build/packages/$locale/TKING/tower.pak"
+            echo "TKING-$locale includes the exact committed tower.pak"
           done
       - uses: actions/upload-artifact@v4
         with:

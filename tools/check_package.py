@@ -29,10 +29,11 @@ for locale in ('ja','cn'):
     for page in package.glob('*.htm'):
         content=page.read_bytes()
         assert b'@APP' not in content and b'\r\n' in content
-    sidecar=package/'tower.gmpak'
-    assert sidecar.is_file(),f'{locale}: missing required tower.gmpak'
+    sidecar=package/'tower.pak'
+    assert sidecar.is_file(),f'{locale}: missing required tower.pak'
+    assert all(len(f.suffix) <= 4 for f in package.iterdir() if f.is_file()), f'{locale}: package contains an extension longer than three characters'
     asset=sidecar.read_bytes()
-    assert asset==(Path(__file__).resolve().parents[1]/'tower.gmpak').read_bytes(), f'{locale}: game pack differs from the checked-in file'
+    assert asset==(Path(__file__).resolve().parents[1]/'tower.pak').read_bytes(), f'{locale}: game pack differs from the checked-in file'
     assert asset[:4]==b'GMPK' and struct.unpack_from('<H',asset,4)[0]==1
     toc=struct.unpack_from('<I',asset,6)[0]
     count=struct.unpack_from('<I',asset,toc)[0]

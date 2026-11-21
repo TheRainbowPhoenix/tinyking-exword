@@ -10,7 +10,7 @@
 
 ## Asset streaming
 
-`tower.gmpak` is **not embedded in the ELF**. It is committed at the repository root; CMake and GitHub Actions copy it beside `main.edl` into both locale packages. CI checks that both copies exactly match the committed file and fails if the pack is missing.
+`tower.pak` is **not embedded in the ELF**. It is committed at the repository root; CMake and GitHub Actions copy it beside `main.edl` into both locale packages. CI checks that both copies exactly match the committed file and fails if the pack is missing.
 
 - One 320×480 P4 RGB565 background (76,800 bytes + 32-byte palette) at a time.
 - The current and adjacent collision rooms; the nearby 64-pixel collision band
@@ -29,7 +29,7 @@ The important runtime files must end up together:
 TKING/_CONTENT/
   tinyking.d01      # resident Edelweiss loader
   main.edl          # native C game
-  tower.gmpak       # external game assets (1.8 MB)
+  tower.pak       # external game assets (1.8 MB)
 ```
 
 The `main.edl` sidecar path is resolved by Edelweiss. If the asset is absent, the game displays an

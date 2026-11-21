@@ -2,7 +2,7 @@
  * Tinyking-specific Edelweiss ELF loader integration test.
  *
  * Based on Edelweiss's tests/check_edl.c. Unlike its >128 KiB large-demo
- * fixture, TKING stores the 1.8 MB tower.gmpak beside (not inside) main.edl.
+ * fixture, TKING stores the 1.8 MB tower.pak beside (not inside) main.edl.
  * Still exercise the actual Edelweiss parser, zero-fill, symbol relocation,
  * load-at-another-arena behavior, and metadata.
  */
@@ -117,7 +117,7 @@ static void check_file(const char *name)
         }
     }
     /* The D01 bootstrap has a 128 KiB limit; the external EDL does not
-       need to exceed it. The game data is the separate tower.gmpak. */
+       need to exceed it. The game data is the separate tower.pak. */
     assert(loadable_bytes > 0 && loadable_bytes <= ARENA_SIZE);
 
     struct edl_metadata meta;
