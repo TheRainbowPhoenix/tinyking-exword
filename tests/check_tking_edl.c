@@ -52,6 +52,16 @@ static int resolve_symbol(void *context, const char *symbol, uint32_t *address)
     return 0;
 }
 
+static uint32_t read_be32(const void *value)
+{
+    /* .edl.meta comes straight from a big-endian SuperH ELF. The host
+       runner is little-endian, and edl_elf_metadata() deliberately copies
+       the section bytes without translating struct integer fields. */
+    const unsigned char *p = value;
+    return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 |
+           (uint32_t)p[2] << 8 | (uint32_t)p[3];
+}
+
 static void check_file(const char *name)
 {
     FILE *file = fopen(name, "rb");
@@ -112,7 +122,8 @@ static void check_file(const char *name)
 
     struct edl_metadata meta;
     assert(!edl_elf_metadata(file_read, file, (uint32_t)size, &meta, sizeof meta));
-    assert(meta.magic == EDL_ABI_MAGIC && meta.version == EDL_ABI_VERSION);
+    assert(read_be32(&meta.magic) == EDL_ABI_MAGIC &&
+           read_be32(&meta.version) == EDL_ABI_VERSION);
     assert(!strcmp(meta.title, "TKING"));
 
     printf("%s: %u loadable bytes, %u relocated pointers, title %s: PASS\n",
