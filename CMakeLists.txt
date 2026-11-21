@@ -5,7 +5,9 @@ if(NOT FXSDK_PLATFORM_LONG STREQUAL "exword")
 endif()
 
 # Match TheRainbowPhoenix/tinyking-exword's Edelweiss bootstrap procedure.
-set(EDELWEISS_REF "edelweiss" CACHE STRING "Upstream Edelweiss branch/tag/commit")
+# Safety test pin: generic syscall-AE scratch execution was removed after
+# confirming that the firmware itself overwrites the supposed allocation.
+set(EDELWEISS_REF "8ee4e99ba0d99f1e3542e73a5a548062577b8b4a" CACHE STRING "Upstream Edelweiss branch/tag/commit")
 set(EXWORD_APP_ID "TKING" CACHE STRING "Five-character installation ID")
 set(EXWORD_MODULE "tinyking" CACHE STRING "D01 module name without extension")
 set(EXWORD_HEAP_SIZE "262144" CACHE STRING "Payload gint heap")
