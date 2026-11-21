@@ -10,7 +10,7 @@
 
 ## Hardware recovery test
 
-This build pins Edelweiss `db9a86822724519548f88b0b11d8d97225fc22b5`. The earlier
+This build pins Edelweiss `2006f6bb3b8dcfe2d51b9d6d7ec17186f0e539df`. The earlier
 "generic" syscall-AE memory implementation is **not safe**: A8500 firmware
 uses that same scratch memory internally. This corrected loader selects
 the known firmware-fingerprinted P1 RAM arena instead.
@@ -54,3 +54,8 @@ TKING/_CONTENT/
 
 The `main.edl` sidecar path is resolved by Edelweiss. If the asset is absent, the game displays an
 error.
+
+**D6600 input-fix retest:** This revised loader no longer refuses all EDLs
+because of stale touch-screen or keyboard state. The old `-21` launch
+error came from the loader, not from any game or template code. The new
+runtime only clears the event queue before and after an EDL run.
