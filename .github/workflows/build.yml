@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: TheRainbowPhoenix/Edelweiss
-          ref: 8ee4e99ba0d99f1e3542e73a5a548062577b8b4a
+          ref: db9a86822724519548f88b0b11d8d97225fc22b5
           path: dependencies/edelweiss
       - uses: actions/checkout@v4
         with:
@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
           test -s tower.pak
           echo "Bundling $(wc -c < tower.pak) bytes of game data"
-          test "$(git -C dependencies/edelweiss rev-parse HEAD)" = "8ee4e99ba0d99f1e3542e73a5a548062577b8b4a"
+          test "$(git -C dependencies/edelweiss rev-parse HEAD)" = "db9a86822724519548f88b0b11d8d97225fc22b5"
       - name: Install EX-word fxSDK
         shell: bash
         run: |

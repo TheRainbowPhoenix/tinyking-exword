@@ -7,7 +7,7 @@ endif()
 # Match TheRainbowPhoenix/tinyking-exword's Edelweiss bootstrap procedure.
 # Safety test pin: generic syscall-AE scratch execution was removed after
 # confirming that the firmware itself overwrites the supposed allocation.
-set(EDELWEISS_REF "8ee4e99ba0d99f1e3542e73a5a548062577b8b4a" CACHE STRING "Upstream Edelweiss branch/tag/commit")
+set(EDELWEISS_REF "db9a86822724519548f88b0b11d8d97225fc22b5" CACHE STRING "Upstream Edelweiss branch/tag/commit")
 set(EXWORD_APP_ID "TKING" CACHE STRING "Five-character installation ID")
 set(EXWORD_MODULE "tinyking" CACHE STRING "D01 module name without extension")
 set(EXWORD_HEAP_SIZE "262144" CACHE STRING "Payload gint heap")

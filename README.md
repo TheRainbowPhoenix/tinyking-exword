@@ -10,7 +10,7 @@
 
 ## Hardware recovery test
 
-This build pins Edelweiss `8ee4e99ba0d99f1e3542e73a5a548062577b8b4a`. The earlier
+This build pins Edelweiss `db9a86822724519548f88b0b11d8d97225fc22b5`. The earlier
 "generic" syscall-AE memory implementation is **not safe**: A8500 firmware
 uses that same scratch memory internally. This corrected loader selects
 the known firmware-fingerprinted P1 RAM arena instead.
