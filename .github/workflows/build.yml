@@ -1,0 +1,108 @@
+name: Edelweiss example
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      edelweiss_ref:
+        description: Edelweiss branch, tag or commit
+        default: edelweiss
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: example-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check C formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install clang-format==21.1.8
+          mapfile -t sources < <(git ls-files '*.c' '*.h')
+          clang-format --dry-run --Werror "${sources[@]}"
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/therainbowphoenix/gint-docker:main
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TheRainbowPhoenix/Edelweiss
+          ref: ${{ inputs.edelweiss_ref || 'edelweiss' }}
+          path: dependencies/edelweiss
+      - uses: actions/checkout@v4
+        with:
+          repository: TheRainbowPhoenix/exword-xd-a8500-TEST
+          path: dependencies/metadata
+      - name: Install EX-word fxSDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch exword \
+            https://github.com/TheRainbowPhoenix/fxsdk-exword.git /tmp/fxsdk-src
+          cmake -S /tmp/fxsdk-src -B /tmp/fxsdk-build \
+            -DCMAKE_INSTALL_PREFIX=/tmp/fxsdk-exword \
+            -DFXLINK_DISABLE_SDL2=ON -DFXLINK_DISABLE_UDISKS2=ON
+          cmake --build /tmp/fxsdk-build --parallel 2
+          cmake --install /tmp/fxsdk-build
+          git clone --depth=1 https://github.com/brijohn/elf2d01.git /tmp/elf2d01
+          cc -O2 /tmp/elf2d01/elf2d01.c -o /tmp/fxsdk-exword/bin/elf2d01
+          echo /tmp/fxsdk-exword/bin >> "$GITHUB_PATH"
+      - name: Install EX-word gint runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch exword \
+            https://github.com/TheRainbowPhoenix/gint-exword.git /tmp/gint-src
+          cmake -S /tmp/gint-src -B /tmp/gint-build \
+            -DCMAKE_TOOLCHAIN_FILE=/tmp/fxsdk-exword/lib/cmake/fxsdk/EXWORD.cmake \
+            -DCMAKE_INSTALL_PREFIX=/tmp/gint-exword \
+            -DCMAKE_MODULE_PATH=/tmp/fxsdk-exword/lib/cmake/fxsdk
+          cmake --build /tmp/gint-build --parallel 2
+          cmake --install /tmp/gint-build
+      - name: Build the example against the latest Edelweiss
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build-template \
+            -DCMAKE_TOOLCHAIN_FILE=/tmp/fxsdk-exword/lib/cmake/fxsdk/EXWORD.cmake \
+            -DCMAKE_PREFIX_PATH=/tmp/gint-exword \
+            '-DCMAKE_MODULE_PATH=/tmp/gint-exword/lib/cmake/fxsdk;/tmp/fxsdk-exword/lib/cmake/fxsdk' \
+            -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
+            -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
+          cmake --build build-template --parallel 2
+          cc -std=c11 -Wall -Wextra -Werror dependencies/edelweiss/exword/elf.c \
+            dependencies/edelweiss/tests/check_edl.c -o /tmp/check-edl
+          /tmp/check-edl build-template/main.edl
+          python3 tools/check_package.py build-template
+          cat build-template/edelweiss-version.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Example-ja
+          path: build-template/packages/ja/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Example-cn
+          path: build-template/packages/cn/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Example-debug
+          path: |
+            build-template/*.edl
+            build-template/*.d01
+            build-template/*.map
+            build-template/edelweiss-version.txt
+          if-no-files-found: warn
