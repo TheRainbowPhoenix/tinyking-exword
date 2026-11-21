@@ -1,2 +1,7 @@
 /build*/
 /dependencies/
+# The pack derives from the owner's original game assets and may include
+# third-party Jump King artwork. Do not publish accidentally.
+/assets/tower.gmpak
+__pycache__/
+*.pyc

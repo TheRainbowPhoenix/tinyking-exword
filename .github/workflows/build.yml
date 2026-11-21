@@ -1,35 +1,33 @@
-name: Edelweiss example
-on:
-  push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      edelweiss_ref:
-        description: Edelweiss branch, tag or commit
-        default: edelweiss
-        required: true
+name: TKING EX-word
+
+# Builds every committed branch, not only main. The packages are attached to
+# each workflow run in GitHub Actions; tags do not require a separate release.
+on: [push, pull_request, workflow_dispatch]
+
 permissions:
   contents: read
+
 concurrency:
-  group: example-${{ github.ref }}
+  group: tking-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
-  format:
+  host-check:
+    name: Physics, pack reader and crown metadata
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Check C formatting
-        shell: bash
-        run: |
-          set -euo pipefail
-          python -m pip install clang-format==21.1.8
-          mapfile -t sources < <(git ls-files '*.c' '*.h')
-          clang-format --dry-run --Werror "${sources[@]}"
+      - name: Verify reproducible 32x32 crown art
+        run: python3 tools/generate_icon.py --check
+      - name: Compare C physics against the original Python rules
+        run: python3 tests/test_port.py
+
   build:
+    name: Build TKING packages (JA + CN)
+    needs: host-check
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/therainbowphoenix/gint-docker:main
@@ -38,12 +36,33 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: TheRainbowPhoenix/Edelweiss
-          ref: ${{ inputs.edelweiss_ref || 'edelweiss' }}
+          ref: edelweiss
           path: dependencies/edelweiss
       - uses: actions/checkout@v4
         with:
           repository: TheRainbowPhoenix/exword-xd-a8500-TEST
           path: dependencies/metadata
+      # Game data is deliberately not in the public repository. If the owner
+      # configures Actions variable TINYKING_ASSET_URL, a complete installable
+      # archive is produced. Otherwise, build an executable-only artifact.
+      - name: Optionally fetch tower.gmpak
+        shell: bash
+        env:
+          TINYKING_ASSET_URL: ${{ vars.TINYKING_ASSET_URL }}
+          TINYKING_ASSET_SHA256: ${{ vars.TINYKING_ASSET_SHA256 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$TINYKING_ASSET_URL" ]]; then
+            echo 'No TINYKING_ASSET_URL configured; packages require a separately installed tower.gmpak.'
+            exit 0
+          fi
+          mkdir -p assets
+          curl --fail --location --retry 3 --output assets/tower.gmpak "$TINYKING_ASSET_URL"
+          if [[ -n "$TINYKING_ASSET_SHA256" ]]; then
+            printf '%s  assets/tower.gmpak\n' "$TINYKING_ASSET_SHA256" | sha256sum -c -
+          fi
+          test "$(wc -c < assets/tower.gmpak)" -gt 1024
+          echo 'Downloaded tower.gmpak; both locale artifacts will include game data.'
       - name: Install EX-word fxSDK
         shell: bash
         run: |
@@ -70,39 +89,48 @@ jobs:
             -DCMAKE_MODULE_PATH=/tmp/fxsdk-exword/lib/cmake/fxsdk
           cmake --build /tmp/gint-build --parallel 2
           cmake --install /tmp/gint-build
-      - name: Build the example against the latest Edelweiss
+      - name: Configure and build TKING against Edelweiss
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B build-template \
+          cmake -S . -B build \
             -DCMAKE_TOOLCHAIN_FILE=/tmp/fxsdk-exword/lib/cmake/fxsdk/EXWORD.cmake \
             -DCMAKE_PREFIX_PATH=/tmp/gint-exword \
             '-DCMAKE_MODULE_PATH=/tmp/gint-exword/lib/cmake/fxsdk;/tmp/fxsdk-exword/lib/cmake/fxsdk' \
+            -DEXWORD_APP_ID=TKING \
+            -DEXWORD_APP_TITLE=TKING \
             -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
             -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
-          cmake --build build-template --parallel 2
+          cmake --build build --parallel 2
           cc -std=c11 -Wall -Wextra -Werror dependencies/edelweiss/exword/elf.c \
             dependencies/edelweiss/tests/check_edl.c -o /tmp/check-edl
-          /tmp/check-edl build-template/main.edl
-          python3 tools/check_package.py build-template
-          cat build-template/edelweiss-version.txt
+          /tmp/check-edl build/main.edl
+          python3 tools/check_package.py build
+          # If data was fetched, validate its C reader / collision and weather
+          # behavior against the Python reference, in addition to ELF checks.
+          if [[ -f assets/tower.gmpak ]]; then
+            python3 tests/test_port.py
+          fi
       - uses: actions/upload-artifact@v4
         with:
-          name: Example-ja
-          path: build-template/packages/ja/
+          name: TKING-ja
+          path: build/packages/ja/TKING/
           if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
-          name: Example-cn
-          path: build-template/packages/cn/
+          name: TKING-cn
+          path: build/packages/cn/TKING/
           if-no-files-found: error
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Example-debug
+          name: TKING-debug
           path: |
-            build-template/*.edl
-            build-template/*.d01
-            build-template/*.map
-            build-template/edelweiss-version.txt
+            build/*.edl
+            build/*.d01
+            build/*.map
+            build/edelweiss-version.txt
           if-no-files-found: warn
+          retention-days: 14
