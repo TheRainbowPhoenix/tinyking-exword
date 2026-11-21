@@ -74,8 +74,8 @@ static int init_game(void)
    height >255, and source/target may not have the same stride. */
 static void draw_background(int cam)
 {
-    dsubimage(MAP_X,0,&tk_bg_image,0,cam,MAP_W,160);
-    dsubimage(MAP_X,160,&tk_bg_image,0,cam+160,MAP_W,160);
+    dsubimage(MAP_X,0,&tk_bg_image,0,cam,MAP_W,160,DIMAGE_NONE);
+    dsubimage(MAP_X,160,&tk_bg_image,0,cam+160,MAP_W,160,DIMAGE_NONE);
 }
 static void draw_king(int cam)
 {
@@ -94,7 +94,7 @@ static void draw_king(int cam)
     if(x+w>320)w=320-x;
     if(y<cam){sy=cam-y;h-=sy;y=cam;}
     if(y+h>cam+MAP_H)h=cam+MAP_H-y;
-    if(w>0 && h>0)dsubimage(MAP_X+x,y-cam,image,sx,sy,w,h);
+    if(w>0 && h>0)dsubimage(MAP_X+x,y-cam,image,sx,sy,w,h,DIMAGE_NONE);
 }
 static int cover_mask(void)
 {
@@ -110,7 +110,7 @@ static void draw_covers(int cam,int mask)
         const tk_cover *c=&scene.covers[i];
         int top=imax(cam,c->y),bottom=imin(cam+MAP_H,c->y+c->h);
         if(bottom>top)
-            dsubimage(MAP_X+c->x,top-cam,&c->image,0,top-c->y,c->w,bottom-top);
+            dsubimage(MAP_X+c->x,top-cam,&c->image,0,top-c->y,c->w,bottom-top,DIMAGE_NONE);
     }
 }
 static void draw_speech(int cam)
@@ -118,7 +118,7 @@ static void draw_speech(int cam)
     if(!speech.visible || speech.room!=old_room)return;
     const int top=370;
     int a=imax(cam,top),b=imin(cam+MAP_H,top+64);
-    if(b>a)dsubimage(MAP_X+32,a-cam,&speech.image,0,a-top,256,b-a);
+    if(b>a)dsubimage(MAP_X+32,a-cam,&speech.image,0,a-top,256,b-a,DIMAGE_NONE);
 }
 static void draw_hud(int elevation,int status)
 {
