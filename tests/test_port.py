@@ -13,7 +13,7 @@ import types
 
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 SRC=ROOT/'src'
-PACK=ROOT/'assets/tower.gmpak'
+PACK=ROOT/'tower.gmpak'
 spec=importlib.util.spec_from_file_location('reference_core',ROOT/'tests/reference_core.py')
 ref=importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ref)
@@ -159,7 +159,7 @@ def main():
             str(SRC/'core.c'),str(SRC/'pak.c'),str(SRC/'world.c'),str(SRC/'weather.c'),str(SRC/'scene.c'),
             str(ROOT/'tests/pack_smoke.c'),'-o',str(smoke)],check=True)
         if not PACK.is_file():
-            print('No assets/tower.gmpak: skipped stream smoke (not a source-controlled asset)')
+            print('No tower.gmpak: skipped stream smoke')
         else:
             subprocess.run([str(smoke),str(PACK)],check=True)
         compare_world_weather(tmp)

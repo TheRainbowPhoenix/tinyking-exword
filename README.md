@@ -10,7 +10,7 @@
 
 ## Asset streaming
 
-`tower.gmpak` is **not embedded in the ELF**
+`tower.gmpak` is **not embedded in the ELF**. It is committed at the repository root; CMake and GitHub Actions copy it beside `main.edl` into both locale packages. CI checks that both copies exactly match the committed file and fails if the pack is missing.
 
 - One 320×480 P4 RGB565 background (76,800 bytes + 32-byte palette) at a time.
 - The current and adjacent collision rooms; the nearby 64-pixel collision band

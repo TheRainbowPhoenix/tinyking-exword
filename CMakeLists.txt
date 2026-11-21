@@ -50,26 +50,20 @@ generate_exword_package(TARGET embedded_bootstrap
   TITLE "${EXWORD_APP_TITLE}" HTML_DIR "${EXWORD_METADATA_SOURCE}/html"
   OUTPUT_DIR "${CMAKE_BINARY_DIR}/packages" LOCALES ja cn)
 
-# The pack is deliberately a sidecar: 1.8 MiB cannot fit in Edelweiss's
-# roughly 960 KiB ELF arena. Keep the asset out of the public source tree if
-# you do not have redistribution rights to its source artwork.
-set(TINYKING_PAK "${CMAKE_CURRENT_SOURCE_DIR}/assets/tower.gmpak"
-    CACHE FILEPATH "Path to the user's GMPK v1 asset pack")
+# The game pack stays outside the ELF arena, but is committed to this repo.
+# Both EX-word locale packages MUST contain it beside main.edl.
+set(TINYKING_PAK "${CMAKE_CURRENT_SOURCE_DIR}/tower.gmpak"
+    CACHE FILEPATH "Path to the GMPK v1 asset pack")
+if(NOT EXISTS "${TINYKING_PAK}")
+  message(FATAL_ERROR "Missing tower.gmpak: a TKING package without assets cannot run")
+endif()
 foreach(LOCALE IN ITEMS ja cn)
-  if(EXISTS "${TINYKING_PAK}")
-    add_custom_target(tinyking_payload_${LOCALE} ALL
-      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:tinyking_app>"
-        "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/main.edl"
-      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${TINYKING_PAK}"
-        "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/tower.gmpak"
-      DEPENDS embedded_bootstrap_package_${LOCALE} tinyking_app VERBATIM)
-  else()
-    add_custom_target(tinyking_payload_${LOCALE} ALL
-      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:tinyking_app>"
-        "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/main.edl"
-      DEPENDS embedded_bootstrap_package_${LOCALE} tinyking_app VERBATIM)
-    message(WARNING "Missing ${TINYKING_PAK}: executable will build, but needs tower.gmpak copied beside main.edl to run")
-  endif()
+  add_custom_target(tinyking_payload_${LOCALE} ALL
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:tinyking_app>"
+      "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/main.edl"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${TINYKING_PAK}"
+      "${CMAKE_BINARY_DIR}/packages/${LOCALE}/${EXWORD_APP_ID}/tower.gmpak"
+    DEPENDS embedded_bootstrap_package_${LOCALE} tinyking_app VERBATIM)
 endforeach()
 
 execute_process(COMMAND git rev-parse HEAD WORKING_DIRECTORY "${edelweiss_SOURCE_DIR}"

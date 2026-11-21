@@ -1,4 +1,4 @@
-"""Validate the packaged Edelweiss bootstrap, EDL and optional sidecar."""
+"""Validate the packaged Edelweiss bootstrap, EDL and required asset sidecar."""
 from pathlib import Path
 import re
 import struct
@@ -30,15 +30,14 @@ for locale in ('ja','cn'):
         content=page.read_bytes()
         assert b'@APP' not in content and b'\r\n' in content
     sidecar=package/'tower.gmpak'
-    if sidecar.exists():
-        asset=sidecar.read_bytes()
-        assert asset[:4]==b'GMPK' and struct.unpack_from('<H',asset,4)[0]==1
-        toc=struct.unpack_from('<I',asset,6)[0]
-        count=struct.unpack_from('<I',asset,toc)[0]
-        assert toc+4+count*25==len(asset)
-        print(locale,appid,'EDL + asset pack: PASS')
-    else:
-        print(locale,appid,'EDL PASS (game asset must be installed separately)')
+    assert sidecar.is_file(),f'{locale}: missing required tower.gmpak'
+    asset=sidecar.read_bytes()
+    assert asset==(Path(__file__).resolve().parents[1]/'tower.gmpak').read_bytes(), f'{locale}: game pack differs from the checked-in file'
+    assert asset[:4]==b'GMPK' and struct.unpack_from('<H',asset,4)[0]==1
+    toc=struct.unpack_from('<I',asset,6)[0]
+    count=struct.unpack_from('<I',asset,toc)[0]
+    assert toc+4+count*25==len(asset)
+    print(locale,appid,'EDL + checked-in asset pack: PASS')
 
 # The host must resolve resident hardware symbols, not link another kernel.
 u32=lambda off:struct.unpack_from('>I',payload,off)[0]

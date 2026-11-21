@@ -22,7 +22,9 @@ jobs:
           python-version: '3.13'
       - name: Verify reproducible 32x32 crown art
         run: python3 tools/generate_icon.py --check
-      - name: Compare C physics against the original Python rules
+      - name: Require checked-in game data
+        run: test -s tower.gmpak
+      - name: Compare C physics, streaming and weather against Python
         run: python3 tests/test_port.py
 
   build:
@@ -42,27 +44,13 @@ jobs:
         with:
           repository: TheRainbowPhoenix/exword-xd-a8500-TEST
           path: dependencies/metadata
-      # Game data is deliberately not in the public repository. If the owner
-      # configures Actions variable TINYKING_ASSET_URL, a complete installable
-      # archive is produced. Otherwise, build an executable-only artifact.
-      - name: Optionally fetch tower.gmpak
+      # Use the committed game pack; never silently build asset-free packages.
+      - name: Check checked-in tower.gmpak
         shell: bash
-        env:
-          TINYKING_ASSET_URL: ${{ vars.TINYKING_ASSET_URL }}
-          TINYKING_ASSET_SHA256: ${{ vars.TINYKING_ASSET_SHA256 }}
         run: |
           set -euo pipefail
-          if [[ -z "$TINYKING_ASSET_URL" ]]; then
-            echo 'No TINYKING_ASSET_URL configured; packages require a separately installed tower.gmpak.'
-            exit 0
-          fi
-          mkdir -p assets
-          curl --fail --location --retry 3 --output assets/tower.gmpak "$TINYKING_ASSET_URL"
-          if [[ -n "$TINYKING_ASSET_SHA256" ]]; then
-            printf '%s  assets/tower.gmpak\n' "$TINYKING_ASSET_SHA256" | sha256sum -c -
-          fi
-          test "$(wc -c < assets/tower.gmpak)" -gt 1024
-          echo 'Downloaded tower.gmpak; both locale artifacts will include game data.'
+          test -s tower.gmpak
+          echo "Bundling $(wc -c < tower.gmpak) bytes of game data"
       - name: Install EX-word fxSDK
         shell: bash
         run: |
@@ -106,11 +94,14 @@ jobs:
             dependencies/edelweiss/tests/check_edl.c -o /tmp/check-edl
           /tmp/check-edl build/main.edl
           python3 tools/check_package.py build
-          # If data was fetched, validate its C reader / collision and weather
-          # behavior against the Python reference, in addition to ELF checks.
-          if [[ -f assets/tower.gmpak ]]; then
-            python3 tests/test_port.py
-          fi
+      - name: Confirm both locale packages include the committed game data
+        shell: bash
+        run: |
+          set -euo pipefail
+          for locale in ja cn; do
+            cmp -- tower.gmpak "build/packages/$locale/TKING/tower.gmpak"
+            echo "TKING-$locale includes the exact committed tower.gmpak"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: TKING-ja
