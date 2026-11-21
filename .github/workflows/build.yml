@@ -90,9 +90,14 @@ jobs:
             -DFETCHCONTENT_SOURCE_DIR_EDELWEISS="$GITHUB_WORKSPACE/dependencies/edelweiss" \
             -DEXWORD_METADATA_SOURCE="$GITHUB_WORKSPACE/dependencies/metadata"
           cmake --build build --parallel 2
-          cc -std=c11 -Wall -Wextra -Werror dependencies/edelweiss/exword/elf.c \
-            dependencies/edelweiss/tests/check_edl.c -o /tmp/check-edl
-          /tmp/check-edl build/main.edl
+          # The upstream test requires >128 KiB of *embedded* data because it
+          # targets a large-demo payload. TKING streams tower.gmpak instead.
+          # Keep the loader/relocation checks, without that demo-only threshold.
+          cc -std=c11 -Wall -Wextra -Werror \
+            -Idependencies/edelweiss/exword -Idependencies/edelweiss/sdk \
+            dependencies/edelweiss/exword/elf.c tests/check_tking_edl.c \
+            -o /tmp/check-tking-edl
+          /tmp/check-tking-edl build/main.edl
           python3 tools/check_package.py build
       - name: Confirm both locale packages include the committed game data
         shell: bash
