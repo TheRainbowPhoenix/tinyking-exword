@@ -9,6 +9,7 @@
 #include "touch.h"
 #include "icon.h"
 #include "dirty.h"
+#include "camera.h"
 #include "edl.h"
 #include <gint/display.h>
 #include <gint/drivers/r61523.h>
@@ -225,11 +226,13 @@ static int draw_game(void)
     int y=player.y/TK_Q;
     int room=clamp(y/480,0,world.rooms-1);
     bool room_changed=(room!=old_room);
+    int previous_room=old_room;
     if(room_changed){
         if(tk_pak_load_bg(&pack,room)<0 || tk_scene_load(&scene,&pack,room)<0)return -1;
         old_room=room;
     }
-    int cam=clamp(y-room*480-152,0,160);
+    /* Two fixed views per room: a full map repaint only on page transition. */
+    int cam=tk_camera_choose(y,room,previous_room,old_camera);
     int pose=player.crash>=0?4+(player.facing<0):
              (player.charge?2:0)+(player.facing<0);
     int mask=cover_mask();

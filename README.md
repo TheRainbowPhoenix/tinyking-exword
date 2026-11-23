@@ -80,3 +80,28 @@ Edelweiss PR #5 is experimental: its same-base ELF relocation shortcut can
 help XD-A8500 (`0x8c700000` link and load address), but not XD-D6600, where
 Tinyking's ELF must be rebased to `0x8c800000`. The game does not depend on
 that draft PR. Profile on physical EX-word hardware before claiming FPS gains.
+
+### Two fixed camera pages (no continuous following)
+
+Each 480-pixel room has **two fixed 320-pixel-high views**, at source Y=0
+and Y=160. The camera does not chase falling/jumping motion. The view
+switches down only after the king reaches local Y=288, and switches back up
+only at local Y=184. The 104-pixel hysteresis prevents repeated transitions
+when bouncing near the midpoint. A new room (including respawn) selects the
+appropriate page immediately. Normal movement updates only the king's
+old/new sprite rectangle via the partial LCD path. A page transition repaints
+only the central 320x320 map, and should occur rarely.
+
+### Faster game pack initialization and room loads
+
+The 140-entry GMPK directory now loads with one seek plus **three** reads,
+instead of nine reads in the previous performance branch. File-backed images
+use a single seek for header + pixel data (previously two), and request up
+to 16 KiB per read, reducing the 76.8 KiB background to about five pixel-data
+read calls instead of nineteen. A firmware that rejects requests above
+4 KiB automatically falls back to that size for the rest of the session.
+CI checks both the accelerated and fallback paths with the real `tower.pak`.
+
+The Edelweiss ELF startup itself is separate from these game-pack operations.
+Its experimental same-base relocation optimization remains in upstream PR #5
+and is **not** enabled here without hardware timings.

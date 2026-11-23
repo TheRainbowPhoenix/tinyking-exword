@@ -35,7 +35,7 @@ include("${edelweiss_SOURCE_DIR}/sdk/GenerateEDL.cmake")
 include(GenerateEXWORDPackage)
 
 add_gint_edl(tinyking_app
-  src/main.c src/dirty.c src/core.c src/pak.c src/world.c src/weather.c src/scene.c src/touch.c)
+  src/main.c src/dirty.c src/camera.c src/core.c src/pak.c src/world.c src/weather.c src/scene.c src/touch.c)
 set_target_properties(tinyking_app PROPERTIES OUTPUT_NAME main)
 target_compile_definitions(tinyking_app PRIVATE EDL_HEAP_SIZE=${EXWORD_HEAP_SIZE})
 target_include_directories(tinyking_app PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")

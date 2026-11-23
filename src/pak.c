@@ -11,12 +11,20 @@ image_t tk_bg_image={.format=IMAGE_P4_RGB565,.flags=0,.color_count=16,
                      .data=tk_bg_pixels,.palette=tk_bg_palette};
 static unsigned u16le(const uint8_t *p){return p[0]|((unsigned)p[1]<<8);}
 static uint32_t u32le(const uint8_t *p){return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);}
+/* Native reads cross the EX-word OS boundary. Larger sequential requests
+   cut expensive round trips when streaming a 76.8 KiB background. If a
+   firmware rejects them, retain the proven 4 KiB request size thereafter. */
+static unsigned tk_read_limit=16384;
 static int read_exact(int fd,void *v,unsigned size){
     uint8_t *p=v;
     while(size){
-        unsigned request=size>4096?4096:size;
+        unsigned request=size>tk_read_limit?tk_read_limit:size;
         int n=read(fd,p,request);
-        if(n<=0)return -1;
+        if(n<=0 && request>4096){
+            tk_read_limit=4096;
+            continue;
+        }
+        if(n<=0 || (unsigned)n>request)return -1;
         p+=n;size-=n;
     }
     return 0;
@@ -41,13 +49,11 @@ int tk_pak_open(tk_pak *pak,const char *filename){
     uint32_t n=u32le(count);
     if(n>TK_TOC_MAX || pak->end+4+n*25!=pak->size)goto bad;
     pak->count=(int)n;
-    /* The native filesystem call crosses an expensive OS-world boundary.
-       Read the contiguous 25-byte TOC records in 16-entry batches: for the
-       140-entry tower this replaces 140 seeks+reads with 1 seek+9 reads. */
+    /* A 140-entry tower TOC is just three 64-entry reads and one seek. */
     if(lseek(pak->fd,(off_t)(pak->end+4),SEEK_SET)<0)goto bad;
     for(unsigned i=0;i<n;){
-        uint8_t rows[16*25];
-        unsigned batch=n-i>16?16:n-i;
+        uint8_t rows[64*25];
+        unsigned batch=n-i>64?64:n-i;
         if(read_exact(pak->fd,rows,batch*25)<0)goto bad;
         for(unsigned j=0;j<batch;j++){
             const uint8_t *row=rows+j*25;
@@ -81,13 +87,15 @@ static int load_img(tk_pak *pak,const char *name,int w,int h,bool alpha,
     const tk_entry *e=tk_pak_find(pak,name);
     if(!e || e->type!=4 || e->length!=14+32+(unsigned)w*h/2 || (unsigned)w*h/2>cap)return -1;
     uint8_t header[46];
-    if(seek_read(pak,e->offset,header,46)<0)return -1;
+    if(lseek(pak->fd,(off_t)e->offset,SEEK_SET)<0 ||
+       read_exact(pak->fd,header,sizeof header)<0)return -1;
     if(header[0]!=(alpha?6:5) || u16le(header+1)!=(unsigned)w || u16le(header+3)!=(unsigned)h ||
        u16le(header+5)!=(unsigned)w/2 || header[7]!=16 || u16le(header+8)!=32 ||
        u32le(header+10)!=(unsigned)w*h/2)return -1;
     /* SH is big-endian; source palette is native SuperH RGB565. */
     for(int i=0;i<16;i++)pal[i]=(header[14+2*i]<<8)|header[15+2*i];
-    if(seek_read(pak,e->offset+46,pixels,(unsigned)w*h/2)<0)return -1;
+    /* Pixel data follows the header: no second native seek is needed. */
+    if(read_exact(pak->fd,pixels,(unsigned)w*h/2)<0)return -1;
     *dst=(image_t){.format=alpha?IMAGE_P4_RGB565A:IMAGE_P4_RGB565,.flags=0,
                     .color_count=16,.width=w,.height=h,.stride=w/2,
                     .data=pixels,.palette=pal};
