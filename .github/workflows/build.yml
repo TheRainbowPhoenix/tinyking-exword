@@ -24,6 +24,19 @@ jobs:
         run: python3 tools/generate_icon.py --check
       - name: Require checked-in game data
         run: test -s tower.pak
+      - name: Check LCD dirty region calculations
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Isrc src/dirty.c tests/test_dirty.c -o /tmp/test-dirty
+          /tmp/test-dirty
+      - name: Verify fixed camera transitions and page hysteresis
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Isrc src/camera.c tests/test_camera.c -o /tmp/test-camera
+          /tmp/test-camera
+      - name: Verify batched GMPK streaming and old-firmware fallback
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Itests/stub -Isrc src/pak.c tests/test_pak_io.c \
+            -Wl,--wrap=read -Wl,--wrap=lseek -o /tmp/test-pak-io
+          /tmp/test-pak-io tower.pak
       - name: Compare C physics, streaming and weather against Python
         run: python3 tests/test_port.py
 
