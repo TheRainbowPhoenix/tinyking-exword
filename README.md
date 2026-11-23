@@ -59,3 +59,24 @@ error.
 because of stale touch-screen or keyboard state. The old `-21` launch
 error came from the loader, not from any game or template code. The new
 runtime only clears the event queue before and after an EDL run.
+
+## Rendering and startup performance
+
+The renderer keeps the 320x320 map square and two HUD side panels. Each
+frame sends only the pixel rectangles that changed using gint's exported
+`r61523_display_rect()`, **not** a full 528x320 `dupdate()`. When the camera is
+stationary, it restores the union of the old/new king sprite from the P4
+background, redraws overlays clipped to that region, and transfers just that
+small rectangle. Fractional Q8-only movement does not redraw. Charge bars,
+height, falls, status and wind redraw independently, only when changed. The
+initial frame uses one full update, and camera shifts or room transitions still
+redraw and transfer the entire 320x320 map.
+
+The GMPK table of contents is read in 16-entry batches, reducing the 140-entry
+pack from roughly 140 separate seeks plus 140 reads to one seek and nine reads.
+This is a syscall-count optimization, not a measured duration.
+
+Edelweiss PR #5 is experimental: its same-base ELF relocation shortcut can
+help XD-A8500 (`0x8c700000` link and load address), but not XD-D6600, where
+Tinyking's ELF must be rebased to `0x8c800000`. The game does not depend on
+that draft PR. Profile on physical EX-word hardware before claiming FPS gains.

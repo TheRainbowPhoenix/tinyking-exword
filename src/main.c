@@ -8,8 +8,10 @@
 #include "scene.h"
 #include "touch.h"
 #include "icon.h"
+#include "dirty.h"
 #include "edl.h"
 #include <gint/display.h>
+#include <gint/drivers/r61523.h>
 #include <gint/image.h>
 #include <gint/keyboard.h>
 #include <gint/timer.h>
@@ -19,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { MAP_X=104, MAP_W=320, MAP_H=320 };
+enum { MAP_X=TK_MAP_X, MAP_W=TK_MAP_W, MAP_H=TK_MAP_H };
 enum { LEFT_BG=0x1947, RIGHT_BG=0x1105, FRAME=0xd5ac,
        TEXT=0xffff, DIM=0xb5b6, CHARGE=0xf4c5, READY=0x6d28, DOWN=0xd986 };
 static tk_pak pack;
@@ -35,7 +37,8 @@ static image_t king,splat;
 static volatile int frame_ready;
 static int old_room=-1,old_camera=-1,old_x=-999,old_y=-999,old_pose=-1;
 static int old_mask=-1,old_page=-1,old_speech=-1;
-static int hud_charge=-1,hud_falls=-1,hud_height=-1,hud_status=-1;
+static int hud_charge=-1,hud_falls=-1,hud_height=-1,hud_status=-1,hud_wind=99;
+static bool display_ready;
 static int hud_base;
 
 static int imax(int a,int b){return a>b?a:b;}
@@ -120,7 +123,9 @@ static void draw_speech(int cam)
     int a=imax(cam,top),b=imin(cam+MAP_H,top+64);
     if(b>a)dsubimage(MAP_X+32,a-cam,&speech.image,0,a-top,256,b-a,DIMAGE_NONE);
 }
-static void draw_hud(int elevation,int status)
+/* Only the fields that change are repainted; the HUD background, labels and
+   border stay in VRAM.  Partial LCD sends are much cheaper than dupdate(). */
+static void draw_hud_static(void)
 {
     drect(0,0,MAP_X-1,319,LEFT_BG);
     drect(MAP_X+MAP_W,0,527,319,RIGHT_BG);
@@ -130,29 +135,91 @@ static void draw_hud(int elevation,int status)
     dtext(22,29,CHARGE,"KING");
     drect(12,52,91,53,FRAME);
     dtext(22,63,DIM,"CHARGE");
-    for(int i=0;i<TK_CHARGE;i++){
-        int y=86+(TK_CHARGE-1-i)*8;
-        drect(24,y,76,y+5,i<player.charge?CHARGE:0x4269);
-    }
-    dtext(18,247,TEXT,status==2?"CRASHED":status==1?"CHARGING":"READY");
     dtext(14,278,DIM,"SHIFT:JUMP");
     dtext(14,294,DIM,"EXIT:QUIT");
     dtext(442,14,TEXT,"HEIGHT");
-    dprint(437,35,CHARGE,"%05d",elevation);
     dtext(450,75,TEXT,"FALLS");
-    dprint(437,96,TEXT,"%05d",imin(99999,player.falls));
     drect(436,132,514,133,FRAME);
     dtext(448,145,DIM,"AIM:");
     dtext(435,165,TEXT,"LEFT/RIGHT");
     dtext(448,192,DIM,"WIND");
-    dtext(437,211,TEXT,tk_weather_force(&weather,&player)>0?"  > >  ":
-                         tk_weather_force(&weather,&player)<0?"  < <  ":"  calm");
     drect(436,241,514,242,FRAME);
     dtext(442,258,DIM,"EXE:RISE");
     dtext(438,283,DIM,"30 FPS Q8");
-    hud_charge=player.charge;hud_falls=player.falls;
-    hud_height=elevation;hud_status=status;
 }
+static void draw_hud_dynamic(tk_damage *dirty,int elevation,int status,int wind)
+{
+    if(!display_ready)draw_hud_static();
+    if(hud_charge != player.charge){
+        int lo=hud_charge<0?0:imin(hud_charge,player.charge);
+        int hi=hud_charge<0?TK_CHARGE:imax(hud_charge,player.charge);
+        for(int i=lo;i<hi;i++){
+            int y=86+(TK_CHARGE-1-i)*8;
+            drect(24,y,76,y+5,i<player.charge?CHARGE:0x4269);
+        }
+        if(lo<hi)tk_damage_add(dirty,(tk_area){24,86+(TK_CHARGE-hi)*8,76,
+                                               86+(TK_CHARGE-1-lo)*8+5});
+        hud_charge=player.charge;
+    }
+    if(hud_status!=status){
+        drect(12,245,100,265,LEFT_BG);
+        dtext(18,247,TEXT,status==2?"CRASHED":status==1?"CHARGING":"READY");
+        tk_damage_add(dirty,(tk_area){12,245,100,265});
+        hud_status=status;
+    }
+    if(hud_height!=elevation){
+        drect(434,32,522,53,RIGHT_BG);
+        dprint(437,35,CHARGE,"%05d",elevation);
+        tk_damage_add(dirty,(tk_area){434,32,522,53});
+        hud_height=elevation;
+    }
+    int falls=imin(99999,player.falls);
+    if(hud_falls!=falls){
+        drect(434,93,522,116,RIGHT_BG);
+        dprint(437,96,TEXT,"%05d",falls);
+        tk_damage_add(dirty,(tk_area){434,93,522,116});
+        hud_falls=falls;
+    }
+    int direction=wind<0?-1:wind>0?1:0;
+    if(hud_wind!=direction){
+        drect(434,209,521,231,RIGHT_BG);
+        dtext(437,211,TEXT,direction>0?"  > >  ":direction<0?"  < <  ":"  calm");
+        tk_damage_add(dirty,(tk_area){434,209,521,231});
+        hud_wind=direction;
+    }
+}
+
+/* Restore just the union of old/new sprites while the camera is fixed. gint
+   clips overlays and sprites to that rectangle; only one P4 background sub-
+   image is decoded, rather than the entire 320x320 room. */
+static void redraw_sprite_area(int cam,int mask,tk_area box)
+{
+    tk_area bounds={MAP_X,0,MAP_X+MAP_W-1,MAP_H-1};
+    if(!tk_area_clip(&box,bounds))return;
+    struct dwindow previous=dwindow_set((struct dwindow){
+        box.x1,box.y1,box.x2+1,box.y2+1});
+    dsubimage(box.x1,box.y1,&tk_bg_image,box.x1-MAP_X,cam+box.y1,
+              box.x2-box.x1+1,box.y2-box.y1+1,DIMAGE_NONE);
+    draw_king(cam);
+    draw_covers(cam,mask);
+    draw_speech(cam);
+    dwindow_set(previous);
+}
+
+static void send_damage(const tk_damage *dirty)
+{
+    if(!display_ready){
+        /* The first frame fills all pixels anyway. One LCD transfer only. */
+        dupdate();
+        display_ready=true;
+        return;
+    }
+    for(int i=0;i<dirty->count;i++){
+        tk_area b=dirty->boxes[i];
+        r61523_display_rect(gint_vram,b.x1,b.x2,b.y1,b.y2);
+    }
+}
+
 static int draw_game(void)
 {
     int y=player.y/TK_Q;
@@ -166,24 +233,34 @@ static int draw_game(void)
     int pose=player.crash>=0?4+(player.facing<0):
              (player.charge?2:0)+(player.facing<0);
     int mask=cover_mask();
-    int py=player.y/TK_Q;
     int status=player.crash>=0?2:(player.charge?1:0);
-    int elevation=clamp((hud_base-py-TK_PH)*3/2,0,99999);
-    bool map_dirty=room_changed || cam!=old_camera || old_x!=player.x ||
-                   old_y!=player.y || old_pose!=pose || old_mask!=mask ||
-                   old_speech!=speech.visible || (speech.visible && old_page!=speech.page);
-    bool side_dirty=map_dirty || hud_charge!=player.charge || hud_falls!=player.falls ||
-                    hud_height!=elevation || hud_status!=status;
-    if(map_dirty){
+    int elevation=clamp((hud_base-y-TK_PH)*3/2,0,99999);
+    bool camera_dirty=room_changed || cam!=old_camera;
+    bool overlay_dirty=old_mask!=mask || old_speech!=speech.visible ||
+                       (speech.visible && old_page!=speech.page);
+    bool sprite_dirty=old_pose!=pose || old_x/TK_Q!=player.x/TK_Q ||
+                      old_y/TK_Q!=player.y/TK_Q;
+    tk_damage dirty={0};
+    if(camera_dirty || overlay_dirty){
         draw_background(cam);
         draw_king(cam);
         draw_covers(cam,mask);
         draw_speech(cam);
-        old_camera=cam;old_x=player.x;old_y=player.y;
-        old_pose=pose;old_mask=mask;old_speech=speech.visible;old_page=speech.page;
+        tk_damage_add(&dirty,(tk_area){MAP_X,0,MAP_X+MAP_W-1,MAP_H-1});
+    }else if(sprite_dirty){
+        tk_area old_box=tk_sprite_area(old_x,old_y,old_pose,old_room,cam);
+        tk_area new_box=tk_sprite_area(player.x,player.y,pose,room,cam);
+        tk_area changed=tk_area_union(old_box,new_box);
+        tk_area map={MAP_X,0,MAP_X+MAP_W-1,MAP_H-1};
+        if(tk_area_clip(&changed,map)){
+            redraw_sprite_area(cam,mask,changed);
+            tk_damage_add(&dirty,changed);
+        }
     }
-    if(side_dirty)draw_hud(elevation,status);
-    if(map_dirty || side_dirty)dupdate();
+    old_camera=cam;old_x=player.x;old_y=player.y;
+    old_pose=pose;old_mask=mask;old_speech=speech.visible;old_page=speech.page;
+    draw_hud_dynamic(&dirty,elevation,status,tk_weather_force(&weather,&player));
+    if(dirty.count || !display_ready)send_damage(&dirty);
     return 0;
 }
 static int game_loop(void)
@@ -250,7 +327,6 @@ int main(void)
         tk_pak_close(&pack);
         return init;
     }
-    dclear(C_BLACK);
     if(draw_game()<0){show_error("Cannot load first room");tk_pak_close(&pack);return -1;}
     int result=game_loop();
     if(result<0)show_error("Stream or rendering error");

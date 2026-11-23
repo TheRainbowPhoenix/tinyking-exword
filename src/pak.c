@@ -41,11 +41,23 @@ int tk_pak_open(tk_pak *pak,const char *filename){
     uint32_t n=u32le(count);
     if(n>TK_TOC_MAX || pak->end+4+n*25!=pak->size)goto bad;
     pak->count=(int)n;
-    for(unsigned i=0;i<n;i++){
-        uint8_t row[25];tk_entry *e=&pak->toc[i];
-        if(seek_read(pak,pak->end+4+25*i,row,25)<0)goto bad;
-        memcpy(e->name,row,16);e->type=row[16];e->offset=u32le(row+17);e->length=u32le(row+21);
-        if(e->offset<10 || e->offset>pak->end || e->length>pak->end-e->offset)goto bad;
+    /* The native filesystem call crosses an expensive OS-world boundary.
+       Read the contiguous 25-byte TOC records in 16-entry batches: for the
+       140-entry tower this replaces 140 seeks+reads with 1 seek+9 reads. */
+    if(lseek(pak->fd,(off_t)(pak->end+4),SEEK_SET)<0)goto bad;
+    for(unsigned i=0;i<n;){
+        uint8_t rows[16*25];
+        unsigned batch=n-i>16?16:n-i;
+        if(read_exact(pak->fd,rows,batch*25)<0)goto bad;
+        for(unsigned j=0;j<batch;j++){
+            const uint8_t *row=rows+j*25;
+            tk_entry *e=&pak->toc[i+j];
+            memcpy(e->name,row,16);e->type=row[16];
+            e->offset=u32le(row+17);e->length=u32le(row+21);
+            if(e->offset<10 || e->offset>pak->end ||
+               e->length>pak->end-e->offset)goto bad;
+        }
+        i+=batch;
     }
     return 0;
 bad:tk_pak_close(pak);return -1;
